@@ -33,7 +33,8 @@ Future<void> main() async {
 final _router = shelf_router.Router()
   ..post('/scan', _scanHandler)
   ..get('/scaninfo/<id|[0-9]+>', _scanResult)
-  ..get("/info/<id|[0-9]+>", _scanInfoHnadler);
+  ..get("/info", _totalScanInfoHandler)
+  ..get("/info/<id|[0-9]+>", _scanInfoHandler);
 
 Tasker _tasker = Tasker();
 
@@ -54,7 +55,7 @@ Future<Response> _scanHandler(Request request) async {
       },).catchError((e) {
         print(e);
       });
-      _tasker.addTask(id, proccess);
+      _tasker.addTask(id.toString(), proccess);
       
     },).catchError((e) {
       print(e);
@@ -72,9 +73,7 @@ Future<Response> _scanHandler(Request request) async {
 
 }
 
-Future<Response> _scanInfoHnadler(Request request, String strid) async {
-  
-  final id = int.parse(strid);
+Future<Response> _scanInfoHandler(Request request, String id) async {
   final task =  _tasker.taskStatus(id);
   if (task == null || task.status != TaskStatus.completed){
     return Response.badRequest(body: "Task has not finished");
@@ -85,6 +84,11 @@ Future<Response> _scanInfoHnadler(Request request, String strid) async {
   }
   Stream<List<int>> lines = file.openRead();
   return Response.ok(lines);
+}
+
+Response _totalScanInfoHandler(Request request) {
+  return Response.ok(_jsonEncode(_tasker.tasks));
+
 }
 
 
@@ -104,12 +108,11 @@ const _jsonHeaders = {
   'content-type': 'application/json',
 };
 
-Response _scanResult(Request request, String strid) {
-  final id = int.parse(strid);
+Response _scanResult(Request request, String id) {
   final task =  _tasker.taskStatus(id) ?? Task();
 
   return Response.ok(
-    _jsonEncode({"taskStatus": task.status.name, "taskProcent": task.procent}),
+    _jsonEncode(task.toJson()),
     headers: {
       ..._jsonHeaders,
       'Cache-Control': 'public, max-age=604800, immutable',

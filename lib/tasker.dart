@@ -10,7 +10,9 @@ class Task {
   TaskStatus status = TaskStatus.none;
   Process? process;
   double procent = 0;
+  
   Task();
+
   Task.createTask(this.process,this.status) {
     process!.exitCode.then((exitCode) {
       if (exitCode == 0) {
@@ -33,17 +35,22 @@ class Task {
         }
       },);
   }
+
+   Map<String, dynamic> toJson() => {
+        'taskStatus': status.name,
+        'taskProcent': procent,
+      };
 }
 
 
 class Tasker {
   //Map<int, Process> tasks;
-  Map<int, Task> tasks = {};
+  Map<String, Task> tasks = {};
   int workingTask = 0;
 
   Tasker();
 
-  void addTask(int id, Process process) {
+  void addTask(String id, Process process) {
     tasks[id] = Task.createTask(process, TaskStatus.working);
 
     process.exitCode.then((exitCode) {
@@ -56,7 +63,7 @@ class Tasker {
     print("Number of working tasks: $workingTask");
   }
 
-  Task? taskStatus(int id) {
+  Task? taskStatus(String id) {
     return tasks[id];   
   }
 
