@@ -1,45 +1,62 @@
-import 'dart:async';
-import 'dart:ffi';
 import 'dart:io';
 
 enum TaskStatus {
   none,
   working,
-  completed
+  completed,
+  failed
+}
+class Task {
+  TaskStatus status = TaskStatus.none;
+  Process? process;
+  double procent = 0;
+  Task();
+  Task.createTask(this.process,this.status) {
+    process!.exitCode.then((exitCode) {
+      if (exitCode == 0) {
+        status = TaskStatus.completed;
+      }else {
+        status = TaskStatus.failed;
+      }
+    },);
+    var procentStream = process!.stdout.where((event) {
+        final line = String.fromCharCodes(event);
+        return line.contains("Service scan");
+      },);
+      procentStream.listen((event) {
+        final line = String.fromCharCodes(event);
+        var re = RegExp(r'([\d.]+)%');
+        var match = re.firstMatch(line);
+        if (match != null) {
+          procent = double.parse(match.group(1) ?? "0");
+        }
+      },);
+  }
 }
 
+
 class Tasker {
-  Map<int, Process> tasks;
-  Set<int> completedTasks;
-  int len = 0;
+  //Map<int, Process> tasks;
+  Map<int, Task> tasks = {};
+  int workingTask = 0;
 
-  Tasker({required this.tasks, required this.completedTasks});
+  Tasker();
 
-  void addTask(int id, Process task) {
-    tasks[id] = task;
-    
-    task.exitCode.then((exitCode) {
-      tasks.remove(id);
-      if (exitCode == 0) {
-        completedTasks.add(id);
-      }
-      //  Save result to file //
-      len -= 1;
+  void addTask(int id, Process process) {
+    tasks[id] = Task.createTask(process, TaskStatus.working);
+
+    process.exitCode.then((exitCode) {
+      workingTask -= 1;
+      print("Number of working tasks: $workingTask");
     },);
-    len += 1;
+
+    
+    workingTask += 1;
+    print("Number of working tasks: $workingTask");
   }
 
-  TaskStatus taskStatus(int id) {
-    final completed = completedTasks.contains(id);
-    final working = tasks.containsKey(id);
-    if (completed && !working) {
-      return TaskStatus.completed;
-    } else if (working && !completed) {
-      return TaskStatus.working;
-    }else {
-      return TaskStatus.none;
-    }
-    
+  Task? taskStatus(int id) {
+    return tasks[id];   
   }
 
 }
