@@ -47,7 +47,7 @@ Future<Response> _scanHandler(Request request) async {
     final scan = scanHosts(id, hosts, query["ports"]);
     scan.then((proccess) {
       print("Started $id task succesfully (PID ${proccess.pid})");
-      stderr.addStream(proccess.stderr);
+      //stderr.addStream(proccess.stderr);
       proccess.exitCode.then((value) {
         print("Ended $id task with exit code $value");
         
@@ -75,8 +75,8 @@ Future<Response> _scanHandler(Request request) async {
 Future<Response> _scanInfoHnadler(Request request, String strid) async {
   
   final id = int.parse(strid);
-  final taskStatus =  _tasker.taskStatus(id);
-  if (taskStatus != TaskStatus.completed){
+  final task =  _tasker.taskStatus(id);
+  if (task == null || task.status != TaskStatus.completed){
     return Response.badRequest(body: "Task has not finished");
   }
   final file = File('scans/$id.xml');

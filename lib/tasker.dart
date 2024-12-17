@@ -15,6 +15,7 @@ class Task {
     process!.exitCode.then((exitCode) {
       if (exitCode == 0) {
         status = TaskStatus.completed;
+        procent = 100;
       }else {
         status = TaskStatus.failed;
       }
