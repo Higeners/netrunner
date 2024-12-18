@@ -1,16 +1,26 @@
 import 'dart:io';
+import 'package:hive/hive.dart';
 
+part 'tasker.g.dart';
+
+@HiveType(typeId: 1)
 enum TaskStatus {
+  @HiveField(0)
   none,
+  @HiveField(1)
   working,
+  @HiveField(2)
   completed,
+  @HiveField(3)
   failed
 }
+@HiveType(typeId: 0)
 class Task {
+  @HiveField(0)
   TaskStatus status = TaskStatus.none;
   Process? process;
+  @HiveField(1)
   double procent = 0;
-  
   Task();
 
   Task.createTask(this.process,this.status) {
@@ -43,16 +53,17 @@ class Task {
 }
 
 
+
 class Tasker {
   //Map<int, Process> tasks;
   Map<String, Task> tasks = {};
   int workingTask = 0;
 
-  Tasker();
-
   void addTask(String id, Process process) {
-    tasks[id] = Task.createTask(process, TaskStatus.working);
-
+    final task = Task.createTask(process, TaskStatus.working);
+    tasks[id] = task;
+    final box = Hive.box<Task>("scans");
+    box.put(id, task);
     process.exitCode.then((exitCode) {
       workingTask -= 1;
       print("Number of working tasks: $workingTask");
@@ -64,7 +75,7 @@ class Tasker {
   }
 
   Task? taskStatus(String id) {
-    return tasks[id];   
+    return Hive.box<Task>("scans").get(id);   
   }
 
 }

@@ -8,6 +8,9 @@ environment:
 
 # Add regular dependencies here.
 dependencies:
+  build_runner: ^2.4.14
+  hive: ^2.2.3
+  hive_generator: ^2.0.1
   shelf: ^1.4.2
   shelf_router: ^1.1.4
   shelf_static: ^1.1.3
