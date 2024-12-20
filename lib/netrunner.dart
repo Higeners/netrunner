@@ -14,24 +14,21 @@ import 'package:hive/hive.dart';
 export 'src/netrunner_base.dart';
 
 Future<void> main() async {
-    final port = 8080;
-    Hive..init("./db")
-        ..registerAdapter(TaskAdapter())
-        ..registerAdapter(TaskStatusAdapter());
-    final cascade = Cascade()
-        .add(_router.call);
-    final server = await shelf_io.serve(
-        logRequests()
-            .addHandler(cascade.handler),
-        InternetAddress.anyIPv4, 
-        port);
-    final _ = await Hive.openBox<Task>("scans");
-    ProcessSignal.sigint.watch().listen((signal) {
-      print("Exiting....");
-      Hive.close();
-      exit(signal.signalNumber);
-    });
-    print('Serving at http://${server.address.host}:${server.port}');
+  final port = 8080;
+  Hive
+    ..init("./db")
+    ..registerAdapter(TaskAdapter())
+    ..registerAdapter(TaskStatusAdapter());
+  final cascade = Cascade().add(_router.call);
+  final server = await shelf_io.serve(
+      logRequests().addHandler(cascade.handler), InternetAddress.anyIPv4, port);
+  final _ = await Hive.openBox<Task>("scans");
+  ProcessSignal.sigint.watch().listen((signal) {
+    print("Exiting....");
+    Hive.close();
+    exit(signal.signalNumber);
+  });
+  print('Serving at http://${server.address.host}:${server.port}');
 }
 
 // Router instance to handler requests.
@@ -44,41 +41,42 @@ final _router = shelf_router.Router()
 Tasker _tasker = Tasker();
 
 Future<Response> _scanHandler(Request request) async {
-  final queryString =  await request.readAsString();
+  final queryString = await request.readAsString();
   var query = jsonDecode(queryString);
   final hosts = List<String>.from(query["hosts"]);
   if (hosts.isNotEmpty) {
-    final id = DateTime.now().hashCode;
-    final scan = scanHosts(id, hosts, query["ports"]);
-    scan.then((proccess) {
-      print("Started $id task succesfully (PID ${proccess.pid})");
-      proccess.exitCode.then((value) {
-        print("Ended $id task with exit code $value");
-        
-      },).catchError((e) {
-        print(e);
-      });
-      _tasker.addTask(id.toString(), proccess);
-      
-    },).catchError((e) {
+    final id = DateTime.now().microsecondsSinceEpoch.hashCode;
+    final scan = scanHosts(id, hosts, query["ports"], query["speed"]);
+    scan.then(
+      (proccess) {
+        print("Started $id task succesfully (PID ${proccess.pid})");
+        proccess.exitCode.then(
+          (value) {
+            print("Ended $id task with exit code $value");
+          },
+        ).catchError((e) {
+          print(e);
+        });
+        _tasker.addTask(id.toString(), proccess);
+      },
+    ).catchError((e) {
       print(e);
     });
     return Response.ok(
-    _jsonEncode({'id': id}),
-    headers: {
-      ..._jsonHeaders,
-      'Cache-Control': 'public, max-age=604800, immutable',
-    },
-  );
-  }else{
+      _jsonEncode({'id': id}),
+      headers: {
+        ..._jsonHeaders,
+        'Cache-Control': 'public, max-age=604800, immutable',
+      },
+    );
+  } else {
     return Response.badRequest();
   }
-
 }
 
 Future<Response> _scanInfoHandler(Request request, String id) async {
-  final task =  _tasker.taskStatus(id);
-  if (task == null || task.status != TaskStatus.completed){
+  final task = _tasker.taskStatus(id);
+  if (task == null || task.status != TaskStatus.completed) {
     return Response.badRequest(body: "Task has not finished");
   }
   final file = File('scans/$id.xml');
@@ -91,19 +89,27 @@ Future<Response> _scanInfoHandler(Request request, String id) async {
 
 Response _totalScanInfoHandler(Request request) {
   return Response.ok(_jsonEncode(_tasker.tasks));
-
 }
 
-
-Future<Process> scanHosts(int id, List<String> host, String? ports, {String speed = "4"}) {
-  var args = ["--stats-every", "10s","-oX", "scans/$id.xml", "-T$speed", "-sV", "--script=vuln"];
+Future<Process> scanHosts(
+    int id, List<String> host, String? ports, String? speed) {
+  var args = [
+    "--stats-every",
+    "10s",
+    "-oX",
+    "scans/$id.xml",
+    "-T${speed ?? "4"}",
+    "-sV",
+    "--script=vuln"
+  ];
   if (ports != null) {
     args += ["-p", ports];
   }
   args += host;
+  print(args);
   return Process.start("nmap", args, runInShell: true);
-  //return Process.run("nmap", args);
 }
+
 String _jsonEncode(Object? data) =>
     const JsonEncoder.withIndent(' ').convert(data);
 
@@ -112,7 +118,7 @@ const _jsonHeaders = {
 };
 
 Response _scanResult(Request request, String id) {
-  final task =  _tasker.taskStatus(id) ?? Task();
+  final task = _tasker.taskStatus(id) ?? Task();
 
   return Response.ok(
     _jsonEncode(task.toJson()),
