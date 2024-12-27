@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:hive/hive.dart';
 
@@ -16,15 +18,17 @@ enum TaskStatus {
 }
 
 @HiveType(typeId: 0)
-class Task {
+class Task extends HiveObject {
   @HiveField(0)
+  late int id;
+  @HiveField(1)
   TaskStatus status = TaskStatus.none;
   Process? process;
-  @HiveField(1)
+  @HiveField(2)
   double procent = 0;
+  StreamController<Map<String, dynamic>> progressStream = StreamController();
   Task();
-
-  Task.createTask(this.process, this.status) {
+  Task.createTask(this.process, this.status, this.id) {
     process!.exitCode.then(
       (exitCode) {
         if (exitCode == 0) {
@@ -33,6 +37,8 @@ class Task {
         } else {
           status = TaskStatus.failed;
         }
+        progressStream.add(toJson());
+        save();
       },
     );
     var procentStream = process!.stdout.where(
@@ -47,10 +53,16 @@ class Task {
         var re = RegExp(r'([\d.]+)%');
         var match = re.firstMatch(line);
         if (match != null) {
-          procent = double.parse(match.group(1) ?? "0");
+          procent = double.parse(match[1]!);
         }
+        progressStream.add(toJson());
+        save();
       },
     );
+  }
+
+  Stream<Map<String, dynamic>> taskProgressStream() {
+    return progressStream.stream;
   }
 
   Map<String, dynamic> toJson() => {
@@ -62,9 +74,13 @@ class Task {
 class Tasker {
   Map<String, Task> tasks = {};
   int workingTask = 0;
-
-  void addTask(String id, Process process) {
-    final task = Task.createTask(process, TaskStatus.working);
+  Tasker() {
+    final box = Hive.box<Task>("scans");
+    tasks = box.toMap().map((key, value) => MapEntry(key.toString(), value));
+    print(JsonEncoder().convert(tasks["1012592287"]!.toJson()));
+  }
+  Task addTask(String id, Process process) {
+    final task = Task.createTask(process, TaskStatus.working, int.parse(id));
     tasks[id] = task;
     final box = Hive.box<Task>("scans");
     box.put(id, task);
@@ -77,6 +93,7 @@ class Tasker {
 
     workingTask += 1;
     print("Number of working tasks: $workingTask");
+    return task;
   }
 
   Task? taskStatus(String id) {

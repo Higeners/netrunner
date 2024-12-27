@@ -9,6 +9,8 @@ environment:
 # Add regular dependencies here.
 dependencies:
   build_runner: ^2.4.14
+  ecdsa: ^0.1.2
+  elliptic: ^0.3.11
   hive: ^2.2.3
   hive_generator: ^2.0.1
   shelf: ^1.4.2
