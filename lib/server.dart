@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:ecdsa/ecdsa.dart';
 import 'package:netrunner/tasker.dart';
+import 'package:netrunner/user.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart' as shelf_router;
@@ -17,6 +18,7 @@ class ScanServer {
   late final _router = shelf_router.Router()
     ..get('/scaninfo/<id|[0-9]+>', _scanResult)
     ..get("/info", _totalScanInfoHandler)
+    ..get("/users", usersHandler)
     ..get("/info/<id|[0-9]+>", _scanInfoHandler)
     ..get("/wsscan", _webSocketScanHandler);
   late final _pipeline = Pipeline().addHandler(_auth);
@@ -24,16 +26,15 @@ class ScanServer {
   late final EllipticCurve p256 = getP256();
   late final PublicKey pubKey = PublicKey.fromHex(p256,
       "0431d80e97739e1dff6ee7e045937e45d17e9457e2f6dab10f11673df9976af5263d7f8bb5a9a8c24bb236a800a8b85e9a80aa2aa6a2178037b19dc91aaae87dbb");
-  var wsHandle = webSocketHandler((webSocket) {
-    webSocket.stream.listen((message) {
-      print(message);
-      webSocket.sink.add("echo $message");
-      webSocket.sink.close();
-    });
-  });
+  Response usersHandler(Request request) {
+    final users = Hive.box<User>("users").toMap().map(
+          (key, value) => MapEntry(key.toString(), value),
+        );
+    return Response.ok(jsonEncode(users));
+  }
 
   FutureOr<Response> _auth(Request request) {
-    print(jsonEncode(request.headers));
+    print(JsonEncoder.withIndent(' ').convert(request.headers));
     final uid = request.headers["uid"];
     final token = request.headers["token"];
     if (uid != null && token != null) {
@@ -97,7 +98,9 @@ class ScanServer {
         if (hosts.isNotEmpty) {
           final id = DateTime.now().microsecondsSinceEpoch.hashCode;
           final request = ScanRequest(uid!, id.toString(), hosts,
-              ports: jsonMessage["ports"], speed: jsonMessage["speed"]);
+              ports: jsonMessage["ports"],
+              speed: jsonMessage["speed"],
+              intrusive: jsonMessage["intrusive"]);
           Directory("scans/$uid").create(recursive: true);
           final scan = scanHosts(request);
           scan.then(
@@ -154,7 +157,8 @@ class ScanServer {
       "scans/${request.uid}/${request.id}.xml",
       "-T${request.speed ?? "4"}",
       "-sV",
-      "--script=vuln"
+      "--script",
+      "vuln${(request.intrusive ?? false) ? "" : " and not intrusive"}"
     ];
     final ports = request.ports;
     if (ports != null) {
@@ -167,7 +171,7 @@ class ScanServer {
 
   final int port;
   ScanServer(this.port);
-  initializeServer() async {
+  void initializeServer() async {
     final cascade = Cascade().add(_pipeline.call).add(_router.call);
     final server = await shelf_io.serve(
         logRequests().addHandler(cascade.handler),
@@ -183,6 +187,7 @@ class ScanRequest {
   List<String> hosts;
   String? ports;
   String? speed;
-
-  ScanRequest(this.uid, this.id, this.hosts, {this.ports, this.speed});
+  bool? intrusive;
+  ScanRequest(this.uid, this.id, this.hosts,
+      {this.ports, this.speed, this.intrusive});
 }

@@ -77,7 +77,6 @@ class Tasker {
   Tasker() {
     final box = Hive.box<Task>("scans");
     tasks = box.toMap().map((key, value) => MapEntry(key.toString(), value));
-    print(JsonEncoder().convert(tasks["1012592287"]!.toJson()));
   }
   Task addTask(String id, Process process) {
     final task = Task.createTask(process, TaskStatus.working, int.parse(id));
